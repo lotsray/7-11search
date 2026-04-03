@@ -13,7 +13,7 @@
     }
 
     .box {
-      max-width: 900px;
+      max-width: 960px;
       margin: 40px auto;
       background: white;
       padding: 24px;
@@ -31,14 +31,24 @@
       padding: 10px;
       font-size: 16px;
       margin-bottom: 20px;
-      width: 250px;
+      width: 260px;
+      max-width: 100%;
+    }
+
+    .status {
+      margin: 10px 0 16px;
+      color: #555;
+    }
+
+    .error {
+      color: #c62828;
     }
 
     .store {
       border: 1px solid #ddd;
       border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
       background: #fafafa;
     }
 
@@ -50,16 +60,23 @@
 
     .info {
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.7;
+      word-break: break-word;
     }
 
-    .status {
-      margin: 10px 0 16px;
-      color: #555;
-    }
+    @media (max-width: 600px) {
+      .box {
+        margin: 16px;
+        padding: 18px;
+      }
 
-    .error {
-      color: #c62828;
+      h1 {
+        font-size: 24px;
+      }
+
+      select {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -76,7 +93,7 @@
   </div>
 
   <script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxElt9LegASM2NpC-IoLCtr_mQvt5dMWghZv7RiKE-e3lIMYu42fLeBOpkC5Y2WzPZR/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyglMBP-WhKVJYmECb9yg3lmHjrojgsoTzZCQ5dT05dGpHaWBeZIx13TkBP7hrLTYJG/exec";
 
     const countySelect = document.getElementById("county");
     const statusEl = document.getElementById("status");
@@ -104,10 +121,10 @@
         countySelect.innerHTML = `<option value="">請選擇縣市</option>`;
 
         data.counties.forEach(county => {
-          const op = document.createElement("option");
-          op.value = county;
-          op.textContent = county;
-          countySelect.appendChild(op);
+          const option = document.createElement("option");
+          option.value = county;
+          option.textContent = county;
+          countySelect.appendChild(option);
         });
 
         statusEl.innerText = "請選擇縣市";
@@ -137,10 +154,10 @@
           throw new Error(data.message || "查詢失敗");
         }
 
-        statusEl.innerText = `${county} 共 ${data.total} 間`;
+        statusEl.innerText = `${county} 共 ${data.total} 間門市`;
 
         if (!data.stores || data.stores.length === 0) {
-          listEl.innerHTML = `<div class="store">此縣市目前沒有資料。</div>`;
+          listEl.innerHTML = `<div class="store">此縣市目前沒有門市資料。</div>`;
           return;
         }
 
@@ -157,6 +174,7 @@
       } catch (err) {
         statusEl.classList.add("error");
         statusEl.innerText = "查詢失敗：" + err.message;
+        listEl.innerHTML = "";
       }
     }
 
