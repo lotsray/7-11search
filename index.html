@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>門市查詢系統</title>
+
+  <style>
+    body {
+      font-family: Arial, "Noto Sans TC", sans-serif;
+      padding: 20px;
+      background: #f5f6fa;
+    }
+
+    .box {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    select {
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 20px;
+      width: 250px;
+    }
+
+    .store {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+
+    .name {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .info {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .status {
+      margin: 10px 0;
+      color: #555;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="box">
+  <h1>門市查詢</h1>
+
+  <select id="county">
+    <option>載入中...</option>
+  </select>
+
+  <div id="status" class="status"></div>
+  <div id="list"></div>
+</div>
+
+<script>
+
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw77L5KNWfPDfcHJzUn0jpldf-YW6cRw8fIwFuCWlUVopWXPhUDm22eZs5oVKzgOto/exec";
+
+const countySelect = document.getElementById("county");
+const status = document.getElementById("status");
+const list = document.getElementById("list");
+
+
+// 取得縣市
+async function loadCounties() {
+  const res = await fetch(`${GAS_URL}?action=getCounties`);
+  const data = await res.json();
+
+  countySelect.innerHTML = `<option value="">請選擇縣市</option>`;
+
+  data.counties.forEach(c => {
+    const op = document.createElement("option");
+    op.value = c;
+    op.textContent = c;
+    countySelect.appendChild(op);
+  });
+
+  status.innerText = "請選擇縣市";
+}
+
+
+// 取得店家
+async function loadStores(county) {
+  if (!county) return;
+
+  status.innerText = "查詢中...";
+  list.innerHTML = "";
+
+  const res = await fetch(`${GAS_URL}?action=getStores&county=${encodeURIComponent(county)}`);
+  const data = await res.json();
+
+  status.innerText = `${county} 共 ${data.total} 間`;
+
+  list.innerHTML = data.stores.map(s => `
+    <div class="store">
+      <div class="name">${s.storeName}</div>
+      <div class="info">
+        店號：${s.storeId}<br>
+        地址：${s.address}<br>
+        電話：${s.phone}
+      </div>
+    </div>
+  `).join("");
+}
+
+
+// 事件
+countySelect.addEventListener("change", e => {
+  loadStores(e.target.value);
+});
+
+
+// 初始化
+loadCounties();
+
+</script>
+
+</body>
+</html>
