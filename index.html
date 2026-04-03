@@ -27,17 +27,34 @@
       font-size: 28px;
     }
 
-    select {
-      padding: 10px;
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    select, button {
+      padding: 10px 12px;
       font-size: 16px;
-      margin-bottom: 20px;
-      width: 260px;
-      max-width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #f3f3f3;
     }
 
     .status {
       margin: 10px 0 16px;
       color: #555;
+      line-height: 1.7;
     }
 
     .error {
@@ -60,8 +77,32 @@
 
     .info {
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.8;
       word-break: break-word;
+    }
+
+    .distance {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 8px;
+      background: #e8f0fe;
+      border-radius: 999px;
+      font-size: 13px;
+    }
+
+    a.map-link {
+      color: #1565c0;
+      text-decoration: none;
+    }
+
+    a.map-link:hover {
+      text-decoration: underline;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #777;
+      margin-top: 6px;
     }
 
     @media (max-width: 600px) {
@@ -74,7 +115,12 @@
         font-size: 24px;
       }
 
-      select {
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      select, button {
         width: 100%;
       }
     }
@@ -84,11 +130,15 @@
   <div class="box">
     <h1>門市查詢</h1>
 
-    <select id="county">
-      <option value="">載入中...</option>
-    </select>
+    <div class="controls">
+      <select id="county">
+        <option value="">載入中...</option>
+      </select>
+      <button id="nearestBtn" type="button">查最近門市</button>
+    </div>
 
     <div id="status" class="status">初始化中...</div>
+    <div class="note">查最近門市時，瀏覽器會要求定位權限。</div>
     <div id="list"></div>
   </div>
 
@@ -96,8 +146,11 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyglMBP-WhKVJYmECb9yg3lmHjrojgsoTzZCQ5dT05dGpHaWBeZIx13TkBP7hrLTYJG/exec";
 
     const countySelect = document.getElementById("county");
+    const nearestBtn = document.getElementById("nearestBtn");
     const statusEl = document.getElementById("status");
     const listEl = document.getElementById("list");
+
+    let allStores = [];
 
     async function fetchJson(url) {
       const res = await fetch(url);
@@ -127,7 +180,7 @@
           countySelect.appendChild(option);
         });
 
-        statusEl.innerText = "請選擇縣市";
+        statusEl.innerText = "請選擇縣市，或使用「查最近門市」。";
       } catch (err) {
         countySelect.innerHTML = `<option value="">載入失敗</option>`;
         statusEl.classList.add("error");
@@ -139,7 +192,7 @@
       if (!county) {
         listEl.innerHTML = "";
         statusEl.classList.remove("error");
-        statusEl.innerText = "請選擇縣市";
+        statusEl.innerText = "請選擇縣市，或使用「查最近門市」。";
         return;
       }
 
@@ -155,22 +208,8 @@
         }
 
         statusEl.innerText = `${county} 共 ${data.total} 間門市`;
-
-        if (!data.stores || data.stores.length === 0) {
-          listEl.innerHTML = `<div class="store">此縣市目前沒有門市資料。</div>`;
-          return;
-        }
-
-        listEl.innerHTML = data.stores.map(store => `
-          <div class="store">
-            <div class="name">${escapeHtml(store.storeName)}</div>
-            <div class="info">
-              店號：${escapeHtml(store.storeId)}<br>
-              地址：${escapeHtml(store.address)}<br>
-              電話：${escapeHtml(store.phone)}
-            </div>
-          </div>
-        `).join("");
+        allStores = data.stores || [];
+        renderStores(allStores);
       } catch (err) {
         statusEl.classList.add("error");
         statusEl.innerText = "查詢失敗：" + err.message;
@@ -178,8 +217,163 @@
       }
     }
 
+    async function loadAllStoresForNearest() {
+      const countiesData = await fetchJson(`${GAS_URL}?action=getCounties`);
+      if (!countiesData.success) {
+        throw new Error(countiesData.message || "無法取得縣市資料");
+      }
+
+      const all = [];
+
+      for (const county of countiesData.counties) {
+        const data = await fetchJson(`${GAS_URL}?action=getStores&county=${encodeURIComponent(county)}`);
+        if (data.success && Array.isArray(data.stores)) {
+          all.push(...data.stores);
+        }
+      }
+
+      return all;
+    }
+
+    async function findNearestStores() {
+      try {
+        statusEl.classList.remove("error");
+        statusEl.innerText = "正在取得目前位置...";
+
+        const position = await getCurrentPosition();
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+
+        statusEl.innerText = "正在讀取全部門市資料...";
+        const stores = await loadAllStoresForNearest();
+
+        statusEl.innerText = "正在計算最近門市...";
+        const results = await geocodeAndSortStores(stores, userLat, userLng);
+
+        if (!results.length) {
+          statusEl.innerText = "找不到可定位的門市資料。";
+          listEl.innerHTML = "";
+          return;
+        }
+
+        const nearestTop10 = results.slice(0, 10);
+        statusEl.innerText = `已為你找出最近的 ${nearestTop10.length} 間門市`;
+        renderStores(nearestTop10, true);
+      } catch (err) {
+        statusEl.classList.add("error");
+        statusEl.innerText = "查最近門市失敗：" + err.message;
+        listEl.innerHTML = "";
+      }
+    }
+
+    function getCurrentPosition() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("此瀏覽器不支援定位功能"));
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      });
+    }
+
+    async function geocodeAndSortStores(stores, userLat, userLng) {
+      const output = [];
+
+      for (const store of stores) {
+        const fullAddress = `${store.county || ""}${store.address || ""}`.trim();
+        const coords = await geocodeAddress(fullAddress);
+
+        if (!coords) continue;
+
+        const distanceKm = haversineKm(userLat, userLng, coords.lat, coords.lng);
+
+        output.push({
+          ...store,
+          lat: coords.lat,
+          lng: coords.lng,
+          distanceKm
+        });
+      }
+
+      output.sort((a, b) => a.distanceKm - b.distanceKm);
+      return output;
+    }
+
+    async function geocodeAddress(address) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+        const res = await fetch(url, {
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return null;
+
+        return {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon)
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function toRad(deg) {
+      return deg * Math.PI / 180;
+    }
+
+    function renderStores(stores, showDistance = false) {
+      if (!stores || stores.length === 0) {
+        listEl.innerHTML = `<div class="store">目前沒有符合的門市資料。</div>`;
+        return;
+      }
+
+      listEl.innerHTML = stores.map(store => {
+        const addressText = `${store.county || ""}${store.address || ""}`.trim();
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
+
+        return `
+          <div class="store">
+            <div class="name">${escapeHtml(store.storeName)}</div>
+            <div class="info">
+              店號：${escapeHtml(store.storeId)}<br>
+              縣市：${escapeHtml(store.county)}<br>
+              地址：<a class="map-link" href="${mapUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(store.address)}</a><br>
+              電話：${escapeHtml(store.phone)}
+              ${showDistance && typeof store.distanceKm === "number"
+                ? `<div class="distance">距離約 ${store.distanceKm.toFixed(2)} 公里</div>`
+                : ``}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
     function escapeHtml(str) {
-      return String(str)
+      return String(str ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -189,6 +383,10 @@
 
     countySelect.addEventListener("change", (e) => {
       loadStores(e.target.value);
+    });
+
+    nearestBtn.addEventListener("click", () => {
+      findNearestStores();
     });
 
     loadCounties();
