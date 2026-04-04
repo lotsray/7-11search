@@ -11,7 +11,6 @@
       background: #f5f6fa;
       margin: 0;
     }
-
     .box {
       max-width: 960px;
       margin: 40px auto;
@@ -20,13 +19,11 @@
       border-radius: 12px;
       box-shadow: 0 3px 12px rgba(0,0,0,0.1);
     }
-
     h1 {
       margin-top: 0;
       margin-bottom: 20px;
       font-size: 28px;
     }
-
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -34,7 +31,6 @@
       align-items: center;
       margin-bottom: 18px;
     }
-
     select, button {
       padding: 10px 12px;
       font-size: 16px;
@@ -42,25 +38,15 @@
       border-radius: 8px;
       background: #fff;
     }
-
-    button {
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #f3f3f3;
-    }
-
+    button { cursor: pointer; }
+    button:hover { background: #f3f3f3; }
     .status {
       margin: 10px 0 16px;
       color: #555;
       line-height: 1.7;
+      white-space: pre-wrap;
     }
-
-    .error {
-      color: #c62828;
-    }
-
+    .error { color: #c62828; }
     .store {
       border: 1px solid #ddd;
       border-radius: 10px;
@@ -68,19 +54,16 @@
       margin-bottom: 12px;
       background: #fafafa;
     }
-
     .name {
       font-weight: bold;
       font-size: 18px;
       margin-bottom: 6px;
     }
-
     .info {
       font-size: 14px;
       line-height: 1.8;
       word-break: break-word;
     }
-
     .distance {
       display: inline-block;
       margin-top: 8px;
@@ -89,37 +72,30 @@
       border-radius: 999px;
       font-size: 13px;
     }
-
     a.map-link {
       color: #1565c0;
       text-decoration: none;
     }
-
     a.map-link:hover {
       text-decoration: underline;
     }
-
     .note {
       font-size: 13px;
       color: #777;
       margin-top: 6px;
     }
-
     @media (max-width: 600px) {
       .box {
         margin: 16px;
         padding: 18px;
       }
-
       h1 {
         font-size: 24px;
       }
-
       .controls {
         flex-direction: column;
         align-items: stretch;
       }
-
       select, button {
         width: 100%;
       }
@@ -151,11 +127,27 @@
     const listEl = document.getElementById("list");
 
     async function fetchJson(url) {
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error("HTTP " + res.status);
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          cache: "no-store"
+        });
+
+        const text = await res.text();
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status} - ${text}`);
+        }
+
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          throw new Error("回傳內容不是 JSON：" + text);
+        }
+      } catch (err) {
+        throw new Error("無法連線到 GAS：" + err.message);
       }
-      return await res.json();
     }
 
     async function loadCounties() {
@@ -182,7 +174,7 @@
       } catch (err) {
         countySelect.innerHTML = `<option value="">載入失敗</option>`;
         statusEl.classList.add("error");
-        statusEl.innerText = "縣市載入失敗：" + err.message;
+        statusEl.innerText = "縣市載入失敗：\n" + err.message;
       }
     }
 
@@ -209,7 +201,7 @@
         renderStores(data.stores || [], false);
       } catch (err) {
         statusEl.classList.add("error");
-        statusEl.innerText = "查詢失敗：" + err.message;
+        statusEl.innerText = "查詢失敗：\n" + err.message;
         listEl.innerHTML = "";
       }
     }
@@ -257,7 +249,7 @@
 
       } catch (err) {
         statusEl.classList.add("error");
-        statusEl.innerText = "查最近門市失敗：" + err.message;
+        statusEl.innerText = "查最近門市失敗：\n" + err.message;
         listEl.innerHTML = "";
       }
     }
